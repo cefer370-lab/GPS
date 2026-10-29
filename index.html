@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS Personal CABA</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icono-180-iphone.png">
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GPS CABA">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{--bg:#0b1220;--card:#111a2ee6;--txt:#f1f5f9;--mut:#94a3b8;--acc:#3b82f6;--ok:#22c55e;--bad:#ef4444;--line:#ffffff1a}
+  body.day{--bg:#f8fafc;--card:#ffffffee;--txt:#0f172a;--mut:#64748b;--line:#0000001a}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--txt);background:var(--bg)}
+  #map{position:absolute;inset:0;background:var(--bg)}
+  body:not(.day) .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.5)}
+  .leaflet-control-attribution{font-size:9px}
+  .glass{background:var(--card);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:16px;box-shadow:0 6px 24px #0005}
+  #top{position:absolute;z-index:1000;top:10px;left:10px;right:10px;max-width:560px}
+  #bar{display:flex;gap:8px;padding:6px 6px 6px 14px;align-items:center}
+  #q{flex:1;border:0;background:transparent;color:var(--txt);font-size:16px;outline:0;min-width:0}
+  button{font:inherit;border:0;cursor:pointer;color:var(--txt)}
+  .btn{background:var(--acc);color:#fff;border-radius:12px;padding:10px 16px;font-weight:600}
+  .chip{background:transparent;border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:13px}
+  #favs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  #favs .chip{background:var(--card)}
+  #res{margin-top:8px;overflow:hidden}
+  #res div{padding:12px 14px;border-bottom:1px solid var(--line);font-size:14px;cursor:pointer}
+  #res div:last-child{border:0} #res small{display:block;color:var(--mut);margin-top:2px}
+  #fabs{position:absolute;z-index:1000;right:10px;top:50%;transform:translateY(-60%);display:flex;flex-direction:column;gap:8px}
+  .fab{width:46px;height:46px;border-radius:50%;font-size:20px;background:var(--card);border:1px solid var(--line);box-shadow:0 4px 14px #0005}
+  #bottom{position:absolute;z-index:1000;left:10px;right:10px;bottom:10px;max-width:560px;display:flex;flex-direction:column;gap:8px}
+  #routes{display:none;padding:8px}
+  .rt{padding:10px 12px;border-radius:12px;border:2px solid transparent;cursor:pointer;margin:2px 0}
+  .rt.sel{border-color:var(--acc);background:#3b82f61a}
+  .rt b{font-size:17px}.rt .s{font-size:13px;color:var(--mut);margin-top:2px}
+  .good{color:var(--ok)}.bad{color:var(--bad)}
+  #hud{display:flex;gap:10px;padding:10px;align-items:center}
+  #spd{width:74px;height:74px;border-radius:50%;border:5px solid var(--acc);display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none}
+  #spd b{font-size:28px;line-height:1}#spd small{font-size:10px;color:var(--mut)}
+  #hud.warn #spd{border-color:var(--bad);animation:p 1s infinite}
+  @keyframes p{50%{background:#ef444455}}
+  #nx{flex:1;min-width:0}#nx b{font-size:17px;display:block}#nx span{font-size:13px;color:var(--mut)}
+  #toast{display:none;padding:10px 14px;font-size:14px;border-color:#f59e0b}
+  .rd{width:34px;height:34px;border-radius:50%;background:#fff;color:#111;border:4px solid #dc2626;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;box-shadow:0 1px 6px #0009}
+  .rd.on{box-shadow:0 0 0 4px #facc15}
+  .cut{font-size:22px;filter:drop-shadow(0 1px 3px #000)}
+  .pop{min-width:200px;color:#0f172a}.pop button{margin:3px 2px;padding:7px 10px;border-radius:10px;background:#3b82f6;color:#fff;font-size:13px}
+  .pop button.r{background:#dc2626}.pop input,.pop select{padding:5px;width:70px;border:1px solid #cbd5e1;border-radius:6px}
+  .pop hr{border:0;border-top:1px solid #e2e8f0;margin:6px 0}
+  #guide{display:none;max-height:32vh;overflow:auto;padding:10px}
+  .st{display:flex;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--line);font-size:14px}
+  .st span{font-size:22px;width:30px;text-align:center;flex:none}.st small{display:block;color:var(--mut)}
+  #navbar{display:none;position:absolute;z-index:1001;top:10px;left:10px;right:10px;max-width:560px;padding:12px 14px;gap:12px;align-items:center;background:#1e40af;color:#fff;border-radius:16px;box-shadow:0 6px 24px #0007}
+  #navbar #nIcon{font-size:40px}#navbar b{font-size:28px}#navbar #nTxt{font-size:15px;opacity:.95}
+  #modo{display:flex;gap:6px;margin-top:8px}
+  #modo .chip{background:var(--card);padding:8px 14px;font-size:14px}
+  #modo .chip.sel{background:var(--acc);color:#fff;border-color:var(--acc)}
+  #bCap{font-size:14px;font-weight:700}
+  #modo #bHome{background:#16a34a;color:#fff;border-color:#16a34a;font-weight:700;margin-left:auto}
+  #menu{display:none;position:absolute;z-index:1100;right:64px;top:50%;transform:translateY(-50%);width:255px;max-height:70vh;overflow:auto;padding:8px}
+  .mi{display:block;width:100%;text-align:left;background:transparent;padding:11px 8px;border-radius:10px;font-size:14px;border-bottom:1px solid var(--line)}
+  .mt{font-size:12px;color:var(--mut);margin:10px 4px 4px}
+  .mp{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:14px}.mp button{background:transparent;font-size:16px}
+  #setup{display:none;position:fixed;inset:0;z-index:3000;background:#000b;align-items:center;justify-content:center;padding:16px}
+  #setup .box{background:var(--bg);color:var(--txt);border-radius:16px;padding:18px;max-width:420px;width:100%}
+  #setup input{width:100%;padding:10px;margin:6px 0 12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--txt);font-size:15px}
+  @media(max-height:700px){.fab{width:40px;height:40px;font-size:17px}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="top">
+  <div class="glass" id="bar">
+    <span>🔍</span><input id="q" placeholder="¿A dónde vamos? Calle y altura" onkeydown="if(event.key==='Enter')buscar()">
+    <button class="btn" onclick="buscar()">Buscar</button>
+  </div>
+  <div id="modo"><button class="chip sel" id="mDrive" onclick="setModo('DRIVE')">🚗 Auto</button><button class="chip" id="mWalk" onclick="setModo('WALK')">🚶 A pie</button><button class="chip" id="bHome" onclick="irCasa()">🏠 Volver a casa</button></div>
+  <div id="favs"></div>
+  <div id="res" class="glass" style="display:none"></div>
+</div>
+
+<div id="menu" class="glass"></div>
+<div id="setup"><div class="box"><h3 style="margin:0 0 6px">Conectar con tu planilla</h3>
+<small>Pegá la URL de tu app de Apps Script (termina en /exec) y tu código de acceso. Se guardan solo en este teléfono.</small>
+<input id="sUrl" placeholder="https://script.google.com/macros/s/.../exec"><input id="sTok" type="password" placeholder="Código de acceso">
+<button class="btn" style="width:100%" onclick="guardarConexion()">Guardar y entrar</button></div></div>
+
+<div id="navbar">
+  <span id="nIcon">⬆️</span>
+  <div style="flex:1;min-width:0"><b id="nDist">--</b><div id="nTxt">Calculando...</div></div>
+  <button class="chip" style="color:#fff;border-color:#fff8" onclick="detenerGuia()">⏹ Salir</button>
+</div>
+
+<div id="fabs">
+  <button class="fab" id="bFollow" onclick="toggleFollow()" title="Seguir">🎯</button>
+  <button class="fab" id="bCap" onclick="ciclarCap()" title="Alerta de velocidad">⚡</button>
+  <button class="fab" id="bSound" onclick="toggleSound()" title="Voz">🔇</button>
+  <button class="fab" id="bTheme" onclick="toggleTheme()" title="Día/Noche">🌙</button>
+  <button class="fab" onclick="toggleMenu()" title="Más">⋯</button>
+  <button class="fab" onclick="limpiar()" title="Borrar ruta">✖</button>
+</div>
+
+<div id="bottom">
+  <div id="toast" class="glass"></div>
+  <div id="routes" class="glass"></div>
+  <div id="guide" class="glass"></div>
+  <div id="hud" class="glass">
+    <div id="spd"><b id="speed">0</b><small>km/h</small></div>
+    <div id="nx"><b id="nextTxt">Sin radares adelante</b><span id="info">Tocá el mapa para marcar destino, radar o corte</span></div>
+  </div>
+</div>
+
+<script>
+// ---------- Conexión: Apps Script (iframe) o remota (app instalable) ----------
+var REMOTE=!(window.google&&google.script&&google.script.run);
+var CFG={url:'',token:''};
+try{CFG.url=localStorage.getItem('gpsUrl')||'';CFG.token=localStorage.getItem('gpsToken')||'';}catch(e){}
+var GS=REMOTE?mkRemote(null,null):google.script.run;
+function mkRemote(ok,bad){return new Proxy({},{get:function(_,n){
+  if(n==='withSuccessHandler')return function(f){return mkRemote(f,bad);};
+  if(n==='withFailureHandler')return function(f){return mkRemote(ok,f);};
+  return function(){
+    var a=[].slice.call(arguments);
+    fetch(CFG.url+(CFG.url.indexOf('?')<0?'?':'&')+'token='+encodeURIComponent(CFG.token)+'&fn='+n+'&args='+encodeURIComponent(JSON.stringify(a)))
+      .then(function(r){return r.json();})
+      .then(function(j){if(j.error){if(bad)bad(new Error(j.error));}else if(ok)ok(j.data);})
+      .catch(function(e){if(bad)bad(e);});
+  };}});}
+var radares=[],cortes=[],radarM=[],corteL=L.layerGroup(),me=null,meM=null,last=null,heading=null,speed=0;
+var abrirGuia=false,modo='DRIVE',capOver=false,follow=true,sound=false,alerted={},ctx=null,pending=null,routeG=L.layerGroup(),plan=null,sel=0,dest=null;
+var COLORS={Fijo:'#dc2626',Fotomulta:'#ea580c',Camara:'#7c3aed'};
+
+var map=L.map('map',{zoomControl:false}).setView([-34.6037,-58.3816],13);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+routeG.addTo(map);corteL.addTo(map);
+map.on('dragstart',function(){follow=false;$('bFollow').textContent='📍';});
+map.on('click',function(e){pending=e.latlng;popup(e.latlng);});
+
+function $(i){return document.getElementById(i);}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+var R=Math.PI/180;
+function dist(a,b,c,d){var x=(c-a)*R,y=(d-b)*R,h=Math.sin(x/2)**2+Math.cos(a*R)*Math.cos(c*R)*Math.sin(y/2)**2;return 12742000*Math.asin(Math.sqrt(h));}
+function brg(a,b,c,d){var y=Math.sin((d-b)*R)*Math.cos(c*R),x=Math.cos(a*R)*Math.sin(c*R)-Math.sin(a*R)*Math.cos(c*R)*Math.cos((d-b)*R);return(Math.atan2(y,x)/R+360)%360;}
+function adiff(a,b){var d=Math.abs(a-b)%360;return d>180?360-d:d;}
+function offset(lat,lng,b,m){var d=m/6371000,t=b*R,la=lat*R,lo=lng*R,
+  la2=Math.asin(Math.sin(la)*Math.cos(d)+Math.cos(la)*Math.sin(d)*Math.cos(t)),
+  lo2=lo+Math.atan2(Math.sin(t)*Math.sin(d)*Math.cos(la),Math.cos(d)-Math.sin(la)*Math.sin(la2));return[la2/R,lo2/R];}
+
+// ---------- Tema ----------
+function toggleTheme(){document.body.classList.toggle('day');$('bTheme').textContent=document.body.classList.contains('day')?'☀️':'🌙';}
+
+// ---------- Datos ----------
+function cargarRadares(){
+  GS.withSuccessHandler(function(l){
+    radares=l;radarM.forEach(function(m){map.removeLayer(m);});radarM=[];
+    l.forEach(function(r,i){
+      var icon=L.divIcon({className:'',iconSize:[34,34],html:'<div class="rd" id="rd'+i+'" style="border-color:'+(COLORS[r.tipo]||'#dc2626')+'">'+(r.velocidad||'!')+'</div>'});
+      radarM.push(L.marker([r.lat,r.lng],{icon:icon}).addTo(map).bindPopup('<div class="pop"><b>'+esc(r.ubicacion)+'</b><br>Máx '+r.velocidad+' km/h · '+esc(r.tipo)+'<br>'+esc(r.obs)+(r.sentido?'<br>Sentido: '+esc(r.sentido==='RIO'?'hacia el Río de la Plata':'hacia el Riachuelo'):'')+'</div>'));
+    });
+  }).obtenerRadares();
+}
+function cargarCortes(){
+  GS.withSuccessHandler(function(l){
+    cortes=l;corteL.clearLayers();
+    l.forEach(function(c){
+      L.circle([c.lat,c.lng],{radius:c.radio,color:'#ef4444',weight:2,fillColor:'#ef4444',fillOpacity:.2}).addTo(corteL);
+      var m=L.marker([c.lat,c.lng],{icon:L.divIcon({className:'',html:'<div class="cut">🚧</div>',iconSize:[24,24]})}).addTo(corteL);
+      m.bindPopup('<div class="pop"><b>'+esc(c.desc)+'</b><br>'+esc(c.tipo)+' · radio '+c.radio+' m'+(c.vence?'<br><small>Vence '+new Date(c.vence).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+'</small>':'')+
+        (c.fila?'<hr><button onclick="levantar('+c.fila+')">✅ Ya no está cortado</button>':'')+'</div>');
+    });
+    if(modo==='DRIVE'&&plan&&!plan.warned&&plan.rs[sel]&&cortesEn(nav?nav.route:plan.rs[sel].coords).length){
+      plan.warned=true;
+      if(nav&&dest){lastRe=Date.now();say('Hay un corte en tu ruta. Recalculando.');navPending=true;nav=null;planear(dest.lat,dest.lng,dest.nombre);}
+      else{var t=$('toast');t.style.display='block';t.innerHTML='⚠️ Hay un corte nuevo en tu ruta. <button class="chip" onclick="replanear()">Recalcular</button>';}
+    }
+  }).obtenerCortes();
+}
+function levantar(f){GS.withSuccessHandler(function(){map.closePopup();cargarCortes();}).levantarCorte(f);}
+
+// ---------- GPS ----------
+function onPos(p){
+  var c=p.coords,lat=c.latitude,lng=c.longitude;
+  if(c.speed!=null&&!isNaN(c.speed))speed=c.speed*3.6;
+  else if(last&&(c.accuracy==null||c.accuracy<=100)){var dt=(p.timestamp-last.t)/1000;if(dt>=1){var v=dist(last.lat,last.lng,lat,lng)/dt*3.6;speed=v<250?v:0;}}
+  if(c.heading!=null&&!isNaN(c.heading)&&speed>5)heading=c.heading;
+  else if(last&&dist(last.lat,last.lng,lat,lng)>8)heading=brg(last.lat,last.lng,lat,lng);
+  if(!last||dist(last.lat,last.lng,lat,lng)>8)last={lat:lat,lng:lng,t:p.timestamp};
+  me={lat:lat,lng:lng};trackTramo(c,lat,lng);
+  var ic=L.divIcon({className:'',iconSize:[28,28],html:'<svg style="transform:rotate('+(heading||0)+'deg);transition:transform .3s" width="28" height="28" viewBox="0 0 24 24"><path d="M12 2 L20 22 L12 17 L4 22 Z" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/></svg>'});
+  if(!meM)meM=L.marker([lat,lng],{icon:ic,zIndexOffset:1000}).addTo(map);else{meM.setLatLng([lat,lng]);meM.setIcon(ic);}
+  if(follow)map.setView([lat,lng],Math.max(map.getZoom(),16));
+  $('speed').textContent=Math.round(speed);
+  chequear();if(nav)navTick();
+}
+if(navigator.geolocation)navigator.geolocation.watchPosition(onPos,function(e){$('info').textContent='GPS: '+e.message;},{enableHighAccuracy:true,maximumAge:1000,timeout:15000});
+try{if(navigator.wakeLock)navigator.wakeLock.request('screen');}catch(e){}
+
+function chequear(){
+  if(modo!=='DRIVE'){$('nextTxt').textContent='🚶 Modo a pie';$('hud').classList.remove('warn');return;}
+  alertasExtra();
+  var best=null;
+  radares.forEach(function(r,i){
+    var d=dist(me.lat,me.lng,r.lat,r.lng);if(d>700)delete alerted[i];
+    var front=(heading==null||speed<8||adiff(heading,brg(me.lat,me.lng,r.lat,r.lng))<70)&&sentidoOk(r);
+    if(front&&d<=1500&&(!best||d<best.d))best={r:r,i:i,d:d};
+  });
+  var hud=$('hud');hud.classList.remove('warn');if(capOver)hud.classList.add('warn');
+  document.querySelectorAll('.rd.on').forEach(function(e){e.classList.remove('on');});
+  if(!best){$('nextTxt').textContent='Sin radares adelante';return;}
+  var el=$('rd'+best.i);if(el)el.classList.add('on');
+  var lim=best.r.velocidad,over=lim&&speed>lim+3;
+  $('nextTxt').textContent='📷 '+Math.round(best.d)+' m · máx '+lim;
+  if(best.d<=500){
+    if(over)hud.classList.add('warn');
+    if(!alerted[best.i]){alerted[best.i]=1;if(navigator.vibrate)navigator.vibrate([200,100,200]);beep(over?3:1);say('Radar a '+Math.round(best.d/50)*50+' metros. Máxima '+lim+(over?'. Vas a '+Math.round(speed)+'. Reducí la velocidad.':'.'));}
+    else if(over&&best.d<300&&!alerted['x'+best.i]){alerted['x'+best.i]=1;say('Reducí la velocidad. Límite '+lim+'.');}
+  }
+}
+function say(t){if(!sound||!window.speechSynthesis)return;var u=new SpeechSynthesisUtterance(t);u.lang='es-AR';speechSynthesis.cancel();speechSynthesis.speak(u);}
+function beep(n){if(!sound||!ctx)return;for(var i=0;i<(n||1);i++){var o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime+i*.32;o.connect(g);g.connect(ctx.destination);o.frequency.value=880;g.gain.value=.18;o.start(t);o.stop(t+.2);}}
+function toggleSound(){sound=!sound;if(sound){ctx=ctx||new(window.AudioContext||window.webkitAudioContext)();say('Voz activada');}$('bSound').textContent=sound?'🔊':'🔇';}
+function toggleFollow(){follow=!follow;$('bFollow').textContent=follow?'🎯':'📍';if(follow&&me)map.setView([me.lat,me.lng],16);}
+
+// ---------- Favoritos ----------
+var favs={'Hospital Muñiz':{lat:-34.6395,lng:-58.3925}};
+try{var s=JSON.parse(localStorage.getItem('gpsFavs')||'null');if(s)favs=s;}catch(e){}
+var carM;
+function drawCar(){
+  if(carM){map.removeLayer(carM);carM=null;}
+  if(favs['Mi auto'])carM=L.marker([favs['Mi auto'].lat,favs['Mi auto'].lng],{icon:L.divIcon({className:'',iconSize:[30,30],html:'<div class="cut">🅿️</div>'})}).addTo(map).bindPopup('Acá dejaste el auto');
+}
+function saveFavs(){try{localStorage.setItem('gpsFavs',JSON.stringify(favs));}catch(e){}renderFavs();drawCar();}
+function renderFavs(){var b=$('favs');b.innerHTML='';Object.keys(favs).forEach(function(n){
+  var x=document.createElement('button');x.className='chip';x.textContent=(n==='Casa'?'🏠 ':n==='Mi auto'?'🅿️ ':'⭐ ')+n;
+  x.onclick=function(){if(n==='Mi auto'){abrirGuia=true;setModo('WALK',true);}planear(favs[n].lat,favs[n].lng,n);};b.appendChild(x);});}
+renderFavs();
+
+// ---------- Popup al tocar el mapa ----------
+var PRE={Marcha:{r:300,h:4,i:'✊'},Accidente:{r:150,h:2,i:'💥'},Obra:{r:150,h:12,i:'🚧'}};
+function popup(ll){
+  L.popup().setLatLng(ll).setContent('<div class="pop">'+
+    '<button onclick="irAca()">🚗 Ir acá</button><button onclick="guardarCasa()">🏠 Casa</button><button onclick="guardarAuto(pending)">🅿️ Auto</button><hr>'+
+    '<b>⭐ Guardar lugar</b><br><input id="fn" style="width:55%" placeholder="Nombre"> <button onclick="guardarLugar()">Guardar</button><hr>'+
+    '<b>🚧 Reportar corte</b><br><input id="cd" style="width:95%;margin:3px 0" placeholder="Detalle (opcional)"><br>'+
+    Object.keys(PRE).map(function(k){return '<button class="r" onclick="cortePre(\''+k+'\')">'+PRE[k].i+' '+k+'</button>';}).join('')+
+    '<hr><b>📷 Radar</b> <input id="nv" type="number" value="60"> <button onclick="nuevoRadar()">➕</button></div>').openOn(map);
+}
+function irAca(){planear(pending.lat,pending.lng,'Punto elegido');}
+function guardarCasa(){favs['Casa']={lat:pending.lat,lng:pending.lng};saveFavs();map.closePopup();}
+function guardarLugar(){var n=$('fn').value.trim();if(!n)return;favs[n]={lat:pending.lat,lng:pending.lng};saveFavs();map.closePopup();}
+function guardarAuto(p){
+  p=(p&&p.lat!=null)?p:me;$('menu').style.display='none';
+  if(!p){$('info').textContent='Todavía no tengo tu ubicación GPS.';return;}
+  favs['Mi auto']={lat:p.lat,lng:p.lng};saveFavs();map.closePopup();$('info').textContent='🅿️ Guardé dónde dejaste el auto';
+}
+function nuevoRadar(){var v=parseInt($('nv').value,10)||60;
+  GS.withSuccessHandler(function(){map.closePopup();cargarRadares();}).agregarRadar({ubicacion:'Radar reportado',lat:pending.lat,lng:pending.lng,velocidad:v,tipo:'Fijo',obs:'Agregado desde el mapa'});}
+function cortePre(k){var p=PRE[k],d=$('cd').value.trim();
+  GS.withSuccessHandler(function(){map.closePopup();cargarCortes();})
+    .withFailureHandler(function(e){$('info').textContent='No pude guardar el corte: '+e.message;})
+    .reportarCorte({desc:k+(d?': '+d:''),lat:pending.lat,lng:pending.lng,radio:p.r,horas:p.h,tipo:k});}
+
+// ---------- Búsqueda ----------
+function buscar(){
+  var q=$('q').value.trim();if(!q)return;
+  $('info').textContent='Buscando...';
+  GS.withSuccessHandler(function(j){
+    var box=$('res');box.innerHTML='';box.style.display='block';$('info').textContent='';
+    if(!j.length){box.innerHTML='<div>No encontré "'+esc(q)+'". Probá con calle, altura y barrio.</div>';return;}
+    j.forEach(function(x){var d=document.createElement('div');
+      d.innerHTML='<b>'+esc(x.nombre)+'</b><small>'+esc(x.detalle)+'</small>';
+      d.onclick=function(){box.style.display='none';planear(x.lat,x.lng,x.nombre);};box.appendChild(d);});
+  }).withFailureHandler(function(e){$('info').textContent='Error de búsqueda: '+e.message;}).geocodificar(q);
+}
+
+// ---------- Rutas con evitación de cortes ----------
+function decodePoly(str){var i=0,lat=0,lng=0,out=[];
+  while(i<str.length){var b,sh=0,r=0;do{b=str.charCodeAt(i++)-63;r|=(b&31)<<sh;sh+=5;}while(b>=32);lat+=(r&1)?~(r>>1):(r>>1);
+    sh=0;r=0;do{b=str.charCodeAt(i++)-63;r|=(b&31)<<sh;sh+=5;}while(b>=32);lng+=(r&1)?~(r>>1):(r>>1);
+    out.push([lng/1e5,lat/1e5]);}return out;}
+// Pide rutas a Google (con tráfico). pts=[[lat,lng],...]; devuelve [{coords:[[lng,lat]],dist,dur}]
+var lastErr='';
+function osrm(pts,alt){
+  lastErr='';
+  return new Promise(function(res){
+    GS.withSuccessHandler(function(rs){
+      res(rs.map(function(r){return{coords:decodePoly(r.poly),dist:r.dist,dur:r.dur,steps:r.steps||[]};}));
+    }).withFailureHandler(function(e){lastErr='Error de rutas: '+e.message;res([]);}).rutasGoogle({pts:pts,alt:!!alt,mode:modo});
+  });
+}
+function cortesEn(coords){return cortes.filter(function(c){return coords.some(function(p){return dist(c.lat,c.lng,p[1],p[0])<=c.radio+20;});});}
+function ev(r){r.hits=modo==='DRIVE'?cortesEn(r.coords):[];return r;}
+function nearestIdx(coords,c){var k=0,m=1e12;coords.forEach(function(p,i){var d=dist(c.lat,c.lng,p[1],p[0]);if(d<m){m=d;k=i;}});return k;}
+function mejor(a,b){return(!b||a.hits.length<b.hits.length||(a.hits.length===b.hits.length&&a.dur<b.dur))?a:b;}
+
+function planear(lat,lng,nombre){
+  map.closePopup();$('res').style.display='none';$('toast').style.display='none';
+  dest={lat:lat,lng:lng,nombre:nombre};
+  var o=me||map.getCenter();$('info').textContent='Analizando tráfico y cortes...';
+  osrm([[o.lat,o.lng],[lat,lng]],true).then(function(rs){
+    if(!rs.length){$('info').textContent=lastErr||'Google no devolvió rutas para ese destino.';return;}
+    rs=rs.map(ev);var rapida=rs[0],rec=rs.reduce(function(a,r){return mejor(r,a);},null);
+    var cand=[];
+    if(rec.hits.length&&cortes.length&&modo==='DRIVE'){
+      rec.hits.slice(0,2).forEach(function(c){
+        var k=nearestIdx(rec.coords,c),a=rec.coords[Math.max(0,k-6)],b=rec.coords[Math.min(rec.coords.length-1,k+6)],
+            h=brg(a[1],a[0],b[1],b[0]);
+        [90,-90].forEach(function(s){cand.push(offset(c.lat,c.lng,(h+s+360)%360,c.radio+350));});
+      });
+    }
+    var i=0;
+    (function sig(){
+      if(i>=cand.length)return fin();
+      var v=cand[i++];
+      osrm([[o.lat,o.lng],v,[lat,lng]],false).then(function(x){if(x.length)rec=mejor(ev(x[0]),rec);setTimeout(sig,250);});
+    })();
+    function fin(){
+      var lista=[rec];if(rapida!==rec&&rapida.dur<rec.dur)lista.push(rapida);
+      plan={rs:lista,rapida:rapida,warned:lista[0].hits.length>0};sel=0;dibujar();if(navPending){navPending=false;iniciarGuia(true);}if(abrirGuia){abrirGuia=false;verGuia();}
+    }
+  });
+}
+function replanear(){if(dest)planear(dest.lat,dest.lng,dest.nombre);}
+function dibujar(){
+  routeG.clearLayers();var box=$('routes');box.style.display='block';box.innerHTML='';
+  plan.rs.forEach(function(r,i){if(i===sel)return;L.polyline(r.coords.map(function(p){return[p[1],p[0]];}),{color:'#94a3b8',weight:5,dashArray:'8 8'}).addTo(routeG);});
+  var r=plan.rs[sel],ll=r.coords.map(function(p){return[p[1],p[0]];});
+  var pl=L.polyline(ll,{color:'#3b82f6',weight:7,opacity:.95}).addTo(routeG);
+  L.marker([dest.lat,dest.lng]).addTo(routeG).bindPopup(esc(dest.nombre));
+  map.fitBounds(pl.getBounds(),{padding:[80,80]});follow=false;$('bFollow').textContent='📍';
+  var base=plan.rapida.dur;
+  plan.rs.forEach(function(x,i){
+    var d=document.createElement('div');d.className='rt'+(i===sel?' sel':'');
+    var min=Math.round(x.dur/60),ext=Math.round((x.dur-base)/60);
+    var tit=i===0?(x.hits.length?'⚠️ Mejor opción':'✅ Ruta recomendada'):'Más rápida';
+    var est=x.hits.length?'<span class="bad">pasa por '+x.hits.length+' corte'+(x.hits.length>1?'s':'')+': '+esc(x.hits.map(function(c){return c.desc;}).join(', '))+'</span>':'<span class="good">sin cortes conocidos</span>';
+    if(modo!=='DRIVE'){est='🚶 Ruta peatonal';tit=i===0?'🚶 Ruta a pie':'Alternativa a pie';}
+    d.innerHTML='<b>'+tit+' · '+min+' min</b> · '+(x.dist/1000).toFixed(1)+' km'+(ext>0&&x===plan.rs[0]?' <span class="bad">(+'+ext+' min por evitar cortes)</span>':'')+'<div class="s">'+est+(modo==='DRIVE'?' · '+radaresEn(x.coords)+' radares':'')+' · tocá para ver la guía</div>';
+    d.onclick=function(){sel=i;dibujar();verGuia();};box.appendChild(d);
+  });
+  $('info').textContent='Hacia '+dest.nombre;
+}
+function radaresEn(coords){return radares.filter(function(r){return coords.some(function(p){return Math.abs(p[1]-r.lat)<.001&&Math.abs(p[0]-r.lng)<.001&&dist(r.lat,r.lng,p[1],p[0])<70;});}).length;}
+function limpiar(){detenerGuia();$('guide').style.display='none';routeG.clearLayers();plan=null;dest=null;$('routes').style.display='none';$('toast').style.display='none';$('info').textContent='Tocá el mapa para marcar destino, radar o corte';}
+
+// ---------- Sentido de circulación (General Paz: RIO = hacia el Río de la Plata, RIACHUELO) ----------
+var ANCLA={RIO:[-34.5345,-58.4620],RIACHUELO:[-34.6950,-58.4750]};
+function sentidoOk(r){
+  var a=ANCLA[r.sentido];if(!a||heading==null||speed<8)return true;
+  return adiff(heading,brg(me.lat,me.lng,a[0],a[1]))<100;
+}
+
+// ---------- Menú "Más" ----------
+function toggleMenu(){
+  var m=$('menu');if(m.style.display==='block'){m.style.display='none';return;}
+  var h='<button class="mi" onclick="compartir()">📤 Compartir mi llegada</button>'+
+    '<button class="mi" onclick="guardarAuto()">🅿️ Estacioné acá (mi ubicación)</button>'+
+    (favs['Mi auto']?'<button class="mi" onclick="irAuto()">🚶 Ir a mi auto</button>':'')+
+    '<div class="mt">Mis lugares (tocá el mapa para agregar)</div>';
+  Object.keys(favs).forEach(function(n,i){h+='<div class="mp"><span>'+esc(n)+'</span><button onclick="borrarLugar('+i+')">🗑</button></div>';});
+  if(REMOTE)h+='<button class="mi" onclick="cambiarConexion()">⚙️ Cambiar conexión</button>';
+  m.innerHTML=h;m.style.display='block';
+}
+function borrarLugar(i){var k=Object.keys(favs)[i];if(k){delete favs[k];saveFavs();toggleMenu();toggleMenu();}}
+function irAuto(){$('menu').style.display='none';abrirGuia=true;setModo('WALK',true);planear(favs['Mi auto'].lat,favs['Mi auto'].lng,'Mi auto');}
+
+// ---------- Compartir llegada ----------
+function compartir(){
+  $('menu').style.display='none';var t;
+  if(plan&&dest){var r=plan.rs[sel],eta=new Date(Date.now()+r.dur*1000);
+    t='Voy hacia '+dest.nombre+'. Llego aprox. a las '+eta.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+' ('+Math.round(r.dur/60)+' min).';}
+  else t='Mi ubicación actual.';
+  if(me)t+=' Estoy acá: https://maps.google.com/?q='+me.lat+','+me.lng;
+  var url='https://wa.me/?text='+encodeURIComponent(t);
+  function viaWa(){var w=window.open(url,'_blank');if(!w){try{navigator.clipboard.writeText(t);$('info').textContent='Copié el mensaje. Pegalo en WhatsApp.';}catch(e){$('info').textContent=t;}}}
+  try{if(navigator.share){navigator.share({text:t}).catch(viaWa);return;}}catch(e){}
+  viaWa();
+}
+
+// ---------- Promedio desde el último radar ----------
+var pathD=0,prevFix=null,tramo=null;
+function trackTramo(c,lat,lng){
+  if(prevFix&&(c.accuracy==null||c.accuracy<=100)){var st=dist(prevFix.lat,prevFix.lng,lat,lng);if(st<500)pathD+=st;}
+  prevFix={lat:lat,lng:lng};
+  if(modo!=='DRIVE')return;
+  var now=Date.now();
+  radares.forEach(function(r,i){
+    if(!r.velocidad||!sentidoOk(r)||dist(lat,lng,r.lat,r.lng)>70)return;
+    if(tramo&&tramo.i===i)return;
+    if(tramo&&pathD-tramo.d0>300&&now-tramo.t0<1200000){
+      var avg=(pathD-tramo.d0)/((now-tramo.t0)/1000)*3.6;
+      say('Promedio desde el radar anterior: '+Math.round(avg)+' kilómetros por hora.');
+    }
+    tramo={i:i,t0:now,d0:pathD,lim:r.velocidad,warnAt:0};
+  });
+  if(tramo){
+    var el=(now-tramo.t0)/1000,km=pathD-tramo.d0;
+    if(el>1200||km>25000){tramo=null;return;}
+    var av=el>0?km/el*3.6:0;
+    if(el>90&&km>800&&av>tramo.lim+2&&now-tramo.warnAt>90000){tramo.warnAt=now;beep(2);say('Tu promedio desde el último radar es '+Math.round(av)+'. El límite es '+tramo.lim+'.');}
+  }
+}
+
+// ---------- Conexión (app instalable) ----------
+function guardarConexion(){
+  try{localStorage.setItem('gpsUrl',$('sUrl').value.trim());localStorage.setItem('gpsToken',$('sTok').value.trim());}catch(e){}
+  location.reload();
+}
+function cambiarConexion(){try{localStorage.removeItem('gpsUrl');localStorage.removeItem('gpsToken');}catch(e){}location.reload();}
+
+// ---------- Volver a casa (un toque) ----------
+function irCasa(){
+  if(!favs['Casa']){$('info').textContent='Primero marcá tu casa: tocá el mapa donde vivís y elegí 🏠 Casa.';return;}
+  abrirGuia=true;planear(favs['Casa'].lat,favs['Casa'].lng,'Casa');
+}
+
+// ---------- Modo auto / a pie ----------
+function setModo(m,noPlan){
+  modo=m;$('mDrive').classList.toggle('sel',m==='DRIVE');$('mWalk').classList.toggle('sel',m==='WALK');
+  if(m!=='DRIVE'){document.querySelectorAll('.rd.on').forEach(function(e){e.classList.remove('on');});}
+  if(dest&&!noPlan)replanear();
+}
+
+// ---------- Alertas extra: límite personal y cortes adelante ----------
+var CAPS=[0,40,50,60,70,80,100],capLim=0,capAt=0;
+try{capLim=parseInt(localStorage.getItem('capLim'),10)||0;}catch(e){}
+$('bCap').textContent=capLim?'⚡'+capLim:'⚡';
+function ciclarCap(){
+  capLim=CAPS[(CAPS.indexOf(capLim)+1)%CAPS.length];
+  try{localStorage.setItem('capLim',capLim);}catch(e){}
+  $('bCap').textContent=capLim?'⚡'+capLim:'⚡';
+  if(!sound)toggleSound();
+  say(capLim?'Alerta de velocidad a '+capLim+' kilómetros por hora.':'Alerta de velocidad desactivada.');
+}
+function alertasExtra(){
+  capOver=!!capLim&&speed>capLim+3;
+  if(capOver&&Date.now()-capAt>15000){capAt=Date.now();if(navigator.vibrate)navigator.vibrate([300,100,300]);beep(3);say('Vas a '+Math.round(speed)+'. Tu límite es '+capLim+'.');}
+  cortes.forEach(function(c,i){
+    var d=dist(me.lat,me.lng,c.lat,c.lng)-c.radio;
+    if(d>1000){delete alerted['c'+i];return;}
+    var front=heading==null||speed<8||adiff(heading,brg(me.lat,me.lng,c.lat,c.lng))<75;
+    if(d<=600&&front&&!alerted['c'+i]){
+      alerted['c'+i]=1;if(navigator.vibrate)navigator.vibrate([200,100,200]);beep(2);
+      say(d>0?'Atención, corte adelante a '+Math.max(50,Math.round(d/50)*50)+' metros. '+c.desc:'Estás entrando a una zona cortada. '+c.desc);
+      var t=$('toast');t.style.display='block';t.textContent='🚧 Corte adelante: '+c.desc;setTimeout(function(){t.style.display='none';},12000);
+    }
+  });
+}
+
+// ---------- Guía paso a paso con voz ----------
+var nav=null,navPending=false,offCnt=0,lastRe=0;
+function icon(m){m=m||'';if(m.indexOf('ROUNDABOUT')>=0)return'🔄';if(m.indexOf('UTURN')>=0)return'↩️';if(m.indexOf('SLIGHT_LEFT')>=0)return'↖️';if(m.indexOf('SLIGHT_RIGHT')>=0)return'↗️';if(m.indexOf('LEFT')>=0)return'⬅️';if(m.indexOf('RIGHT')>=0)return'➡️';if(m.indexOf('DEPART')>=0)return'🚗';return'⬆️';}
+function fmt(m){return m>=1000?(m/1000).toFixed(1)+' km':Math.max(10,Math.round(m/10)*10)+' m';}
+function verGuia(){
+  var r=plan.rs[sel],g=$('guide'),st=r.steps||[];g.style.display='block';
+  if(!st.length){g.innerHTML='<div>Google no devolvió pasos para esta ruta.</div>';return;}
+  var h='<button class="btn" style="width:100%;margin-bottom:6px" onclick="iniciarGuia()">▶ Iniciar guía con voz</button>';
+  st.forEach(function(x){h+='<div class="st"><span>'+icon(x.man)+'</span><div>'+esc(x.txt)+'<small>'+fmt(x.dist)+'</small></div></div>';});
+  g.innerHTML=h;
+}
+function iniciarGuia(auto){
+  var r=plan&&plan.rs[sel];if(!r||!r.steps||!r.steps.length)return;
+  if(!sound)toggleSound();
+  nav={steps:r.steps,i:r.steps.length>1?1:0,said:{},route:r.coords};offCnt=0;follow=true;$('bFollow').textContent='🎯';
+  $('routes').style.display='none';$('guide').style.display='none';$('top').style.display='none';$('navbar').style.display='flex';
+  say((auto?'Recalculé la ruta. ':'Iniciando guía. ')+r.steps[0].txt);
+  if(me)map.setView([me.lat,me.lng],17);
+  navTick();
+}
+function detenerGuia(){
+  nav=null;navPending=false;$('navbar').style.display='none';$('top').style.display='';
+  if(plan)$('routes').style.display='block';
+}
+function navTick(){
+  if(!nav||!me)return;
+  var st=nav.steps,W=modo==='WALK';
+  if(dest&&dist(me.lat,me.lng,dest.lat,dest.lng)<(W?25:40)){var n=dest.nombre;say(n==='Mi auto'?'Llegaste a tu auto. Modo auto activado.':'Llegaste a tu destino.');if(n==='Mi auto')setModo('DRIVE',true);detenerGuia();$('info').textContent='Llegaste a '+n;
+    if(modo==='DRIVE'&&n!=='Mi auto'&&n!=='Casa'){var tt=$('toast');tt.style.display='block';tt.innerHTML='🅿️ ¿Dejaste el auto acá? <button class="chip" onclick="guardarAuto();$(\'toast\').style.display=\'none\'">Guardar</button>';}
+    return;}
+  var s=st[nav.i],d=dist(me.lat,me.lng,s.lat,s.lng);
+  if(d<(W?18:30)&&nav.i<st.length-1){nav.i++;nav.said={};s=st[nav.i];d=dist(me.lat,me.lng,s.lat,s.lng);}
+  $('nIcon').textContent=icon(s.man);$('nDist').textContent=fmt(d);$('nTxt').textContent=s.txt;
+  if(d<=(W?120:400)&&!nav.said.a){nav.said.a=1;say('En '+(d>=100?Math.round(d/50)*50:Math.round(d/10)*10)+' metros, '+s.txt);}
+  if(d<=(W?25:70)&&!nav.said.b){nav.said.b=1;say(s.txt);}
+  var m=1e9;for(var k=0;k<nav.route.length;k+=2){var q=nav.route[k],dd=dist(me.lat,me.lng,q[1],q[0]);if(dd<m)m=dd;}
+  if(m>(W?60:150)){if(++offCnt>=3&&Date.now()-lastRe>25000){lastRe=Date.now();offCnt=0;say('Te saliste de la ruta. Recalculando.');navPending=true;nav=null;planear(dest.lat,dest.lng,dest.nombre);}}
+  else offCnt=0;
+}
+
+if(REMOTE&&(!CFG.url||!CFG.token))$('setup').style.display='flex';
+try{if(REMOTE&&'serviceWorker' in navigator&&location.protocol.indexOf('http')===0)navigator.serviceWorker.register('sw.js');}catch(e){}
+drawCar();
+cargarRadares();cargarCortes();setInterval(cargarCortes,60000);
+</script>
+</body>
+</html>
